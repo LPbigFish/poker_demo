@@ -2,7 +2,7 @@
 
 extern crate test;
 
-use std::{collections::HashMap, time, sync::{Mutex, Arc}};
+use std::{collections::HashMap, time, sync::{Mutex}};
 
 use rand::seq::SliceRandom;
 use rayon::prelude::*;
@@ -11,17 +11,15 @@ use indicatif::ProgressIterator;
 const ITERATIONS : u32 = 1_000_000_000;	
 
 fn main() {    
-    let hands: Mutex<HashMap<Combination, Vec<[Card; 7]>>> = Mutex::new(HashMap::new());
+    let hands: Mutex<HashMap<Combination, u64>> = Mutex::new(HashMap::new());
 
     let timer = time::Instant::now();
 
-    let deck = Arc::new(Deck::new());
-
     (0..ITERATIONS).progress().par_bridge().for_each(|_| {
-        let hand = Deck::new_from_cards(deck.as_ref().cards.clone()).deal();
+        let hand = Deck::new().deal();
         let result = handle_the_hand(&hand);
         if result != Combination::HighCard {
-            hands.lock().unwrap().entry(result).or_insert(Vec::new()).push(hand.try_into().unwrap());
+            hands.lock().unwrap().entry(result).and_modify(|v| *v += 1).or_insert(1);
         }
     });
 
@@ -29,7 +27,7 @@ fn main() {
 
     let hands = hands.lock().unwrap();
 
-    let total = (hands.values().map(|v| v.len()).sum::<usize>() as u32).clone();
+    let total = (hands.values().sum::<u128>()).clone();
     for i in hands.keys() {
         println!("{:?}: {}% | {}", i, (hands.get(i).unwrap().len() as u128 * 100) as f64 / ITERATIONS as f64, hands.get(i).unwrap().len());
     }
