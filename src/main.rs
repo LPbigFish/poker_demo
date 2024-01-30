@@ -1,38 +1,46 @@
-#![feature(test)]
-
-extern crate test;
-
-use std::{collections::HashMap, time, sync::{Mutex}};
-
+use std::{collections::HashMap, time, sync::{Mutex, Arc}, thread};
+use indicatif::ProgressBar;
 use rand::seq::SliceRandom;
-use rayon::prelude::*;
-use indicatif::ProgressIterator;
 
 const ITERATIONS : u32 = 1_000_000_000;	
 
 fn main() {    
-    let hands: Mutex<HashMap<Combination, u64>> = Mutex::new(HashMap::new());
-
     let timer = time::Instant::now();
 
-    (0..ITERATIONS).progress().par_bridge().for_each(|_| {
-        let hand = Deck::new().deal();
-        let result = handle_the_hand(&hand);
-        if result != Combination::HighCard {
-            hands.lock().unwrap().entry(result).and_modify(|v| *v += 1).or_insert(1);
-        }
+    let mut handles = vec![];
+
+    let mut results = vec![];
+
+    let mut result: HashMap<Combination, usize> = HashMap::new();
+
+    let progressbar = Arc::new(Mutex::new(ProgressBar::new(ITERATIONS as u64)));
+
+    (0..num_cpus::get()).for_each(|_| {
+        let count = ITERATIONS as usize / num_cpus::get();
+        let progress = Arc::clone(&progressbar);
+        let handle = thread::spawn(move || {
+            let mut mapping: HashMap<Combination, usize> = HashMap::new();
+            let mut deck = Deck::new();
+            (0..count).for_each(|_| {
+                deck = Deck::new();
+                let hand = deck.deal();
+                mapping.entry(handle_the_hand(&hand)).and_modify(|a| *a += 1).or_insert(1);
+                progress.lock().unwrap().inc(1);
+            });
+            mapping
+        });
+        handles.push(handle);
     });
 
-    println!("Finished Simulation in {:?}", timer.elapsed());
-
-    let hands = hands.lock().unwrap();
-
-    let total = (hands.values().sum::<u128>()).clone();
-    for i in hands.keys() {
-        println!("{:?}: {}% | {}", i, (hands.get(i).unwrap().len() as u128 * 100) as f64 / ITERATIONS as f64, hands.get(i).unwrap().len());
+    for handle in handles {
+        results.push(handle.join().unwrap());
     }
-    println!("HighCards: {}% | {}", ((ITERATIONS - total) as u64 * 100 / ITERATIONS as u64) as f64, ITERATIONS - total);
+    
+    results.iter().for_each(|v| v.into_keys().for_each(|y| {
+        result.entry(y).and_modify(|a| *a += v.get(&y).unwrap());
+    }));
 
+    println!("{:?}", timer.elapsed());
 }
 
 fn handle_the_hand(hand: &Vec<Card>) -> Combination {
@@ -154,7 +162,7 @@ impl<T> Tap for T {
     }
 }
 
-#[cfg(test)]
+/* #[cfg(test)]
 mod tests {
     use super::*;
 
@@ -163,4 +171,4 @@ mod tests {
         let mut deck = Deck::new();
         b.iter(|| deck.deal());
     }
-}
+} */
