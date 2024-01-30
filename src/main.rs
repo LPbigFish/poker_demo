@@ -1,8 +1,8 @@
-use std::{collections::HashMap, time, sync::{Mutex, Arc}, thread};
+use std::{collections::HashMap, fmt::Display, sync::{Mutex, Arc}, thread, time};
 use indicatif::ProgressBar;
 use rand::seq::SliceRandom;
 
-const ITERATIONS : u32 = 1_000_000_000;	
+const ITERATIONS : u32 = 1_000_000;	
 
 fn main() {    
     let timer = time::Instant::now();
@@ -15,7 +15,9 @@ fn main() {
 
     let progressbar = Arc::new(Mutex::new(ProgressBar::new(ITERATIONS as u64)));
 
-    (0..num_cpus::get()).for_each(|_| {
+    println!("{}", is_royal_flush(&vec![Card::new(10, 1), Card::new(11, 1), Card::new(12, 1), Card::new(13, 2), Card::new(14, 1), Card::new(2, 1), Card::new(3, 1)]));
+
+    (0..=num_cpus::get()).for_each(|_| {
         let count = ITERATIONS as usize / num_cpus::get();
         let progress = Arc::clone(&progressbar);
         let handle = thread::spawn(move || {
@@ -36,11 +38,16 @@ fn main() {
         results.push(handle.join().unwrap());
     }
     
-    results.iter().for_each(|v| v.into_keys().for_each(|y| {
-        result.entry(y).and_modify(|a| *a += v.get(&y).unwrap());
+    results.iter().for_each(|v| v.keys().for_each(|y| {
+        result.entry(y.clone()).and_modify(|a| *a += v.clone().get(&y).unwrap()).or_insert(*v.get(&y).unwrap());
     }));
 
+    result.entry(Combination::RoyalFlush).or_insert(0);
+    //sort the result
     println!("{:?}", timer.elapsed());
+    result.iter().for_each(|x| println!("{}: {}", x.0, x.1));
+    println!("\n\n\n");
+    result.iter().map(|(k, v)| (k, *v as f64 / ITERATIONS as f64 * 100.0)).collect::<HashMap<&Combination, f64>>().iter().for_each(|x| println!("{}: {}%", x.0, x.1));
 }
 
 fn handle_the_hand(hand: &Vec<Card>) -> Combination {
@@ -72,7 +79,7 @@ fn is_straight_flush(hand: &Vec<Card>) -> bool {
 }
 
 fn is_royal_flush(hand: &Vec<Card>) -> bool {
-    is_flush(hand) && hand.iter().map(|card| card.value).collect::<Vec<u8>>().tap(|x| x.sort()) == vec![10, 11, 12, 13, 14]
+    hand.iter().zip(vec![10, 11, 12, 13, 14]).all(|(card, value)| card.value == value)
 }
 
 fn is_four_of_a_kind(hand: &Vec<Card>) -> bool {
@@ -95,7 +102,7 @@ fn is_full_house(hand: &Vec<Card>) -> bool {
     hand.iter().map(|card| card.value).collect::<Vec<u8>>().tap(|v| v.sort()).windows(4).filter(|x| x[0] == x[1]).count() == 2 && is_three_of_a_kind(hand)
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Eq, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Eq, Hash, Clone, Copy, Ord)]
 enum Combination {
     RoyalFlush,
     StraightFlush,
@@ -107,6 +114,23 @@ enum Combination {
     TwoPairs,
     Pair,
     HighCard,
+}
+
+impl Display for Combination {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Combination::RoyalFlush => write!(f, "Royal Flush"),
+            Combination::StraightFlush => write!(f, "Straight Flush"),
+            Combination::FourOfAKind => write!(f, "Four of a Kind"),
+            Combination::FullHouse => write!(f, "Full House"),
+            Combination::Flush => write!(f, "Flush"),
+            Combination::Straight => write!(f, "Straight"),
+            Combination::ThreeOfAKind => write!(f, "Three of a Kind"),
+            Combination::TwoPairs => write!(f, "Two Pairs"),
+            Combination::Pair => write!(f, "Pair"),
+            Combination::HighCard => write!(f, "High Card"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
