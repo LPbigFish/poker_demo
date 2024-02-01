@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display, sync::{Mutex, Arc}, thread, time};
 use indicatif::ProgressBar;
 use rand::seq::SliceRandom;
 
-const ITERATIONS : u32 = 1_000_000;	
+const ITERATIONS : u32 = 1_000_000_00;	
 
 fn main() {    
     let timer = time::Instant::now();
@@ -15,9 +15,7 @@ fn main() {
 
     let progressbar = Arc::new(Mutex::new(ProgressBar::new(ITERATIONS as u64)));
 
-    println!("{}", is_royal_flush(&vec![Card::new(10, 1), Card::new(11, 1), Card::new(12, 1), Card::new(13, 2), Card::new(14, 1), Card::new(2, 1), Card::new(3, 1)]));
-
-    (0..=num_cpus::get()).for_each(|_| {
+    (0..num_cpus::get()).for_each(|_| {
         let count = ITERATIONS as usize / num_cpus::get();
         let progress = Arc::clone(&progressbar);
         let handle = thread::spawn(move || {
@@ -47,7 +45,7 @@ fn main() {
     println!("{:?}", timer.elapsed());
     result.iter().for_each(|x| println!("{}: {}", x.0, x.1));
     println!("\n\n\n");
-    result.iter().map(|(k, v)| (k, *v as f64 / ITERATIONS as f64 * 100.0)).collect::<HashMap<&Combination, f64>>().iter().for_each(|x| println!("{}: {}%", x.0, x.1));
+    result.iter().map(|(k, v)| (k, *v as f64 / ITERATIONS as f64 * 100.0)).collect::<HashMap<&Combination, f64>>().iter().for_each(|x| println!("{}: {:.4}%", x.0, x.1));
 }
 
 fn handle_the_hand(hand: &Vec<Card>) -> Combination {
@@ -79,7 +77,7 @@ fn is_straight_flush(hand: &Vec<Card>) -> bool {
 }
 
 fn is_royal_flush(hand: &Vec<Card>) -> bool {
-    hand.iter().zip(vec![10, 11, 12, 13, 14]).all(|(card, value)| card.value == value)
+    hand.clone().tap(|v| v.sort_by_key(|card| card.suit)).windows(5).all(| cards| cards.iter().all(|card| card.suit == cards[0].suit).then(|| cards.iter().zip(vec![10, 11, 12, 13, 14]).all(|(card, value)| card.value == value)).is_some())
 }
 
 fn is_four_of_a_kind(hand: &Vec<Card>) -> bool {
@@ -160,10 +158,6 @@ impl Deck {
         }
         cards.shuffle(&mut rand::thread_rng());
         Deck { cards: cards.clone() }
-    }
-
-    fn new_from_cards(cards: Vec<Card>) -> Deck {
-        Deck { cards: cards.tap(|v| v.shuffle(&mut rand::thread_rng())) }
     }
 
     fn deal(&mut self) -> Vec<Card> {
